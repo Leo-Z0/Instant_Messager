@@ -2,6 +2,7 @@
 //
 
 #include <iostream>
+#include <string>
 #include <Windows.h>
 #include <mutex>
 #include <stdlib.h>
@@ -16,21 +17,27 @@ std::mutex mtx_console;
 HANDLE hConsole = nullptr;
 
 using length_t = unsigned long;
-
+using lRect = RECT;
+using lCoord = COORD;
 bool initConsole();
-length_t printXY(const char* sStr, unsigned int nX = 0, unsigned int nY = 0);
-length_t printXYA(const char* sStr, unsigned int nX = 0, unsigned int nY = 0, WORD wAttr = conAttrText);
-length_t printXY(std::string& sStr, unsigned int nX = 0, unsigned int nY = 0);
-length_t printXY(std::wstring& wsStr, unsigned int nX = 0, unsigned int nY = 0);
-length_t printXY(const wchar_t* wsStr, unsigned int nX = 0, unsigned int nY = 0);
+
+
+length_t printXY(const char* str, const unsigned int nX = 0, const unsigned int nY = 0);
+length_t printXY(const char* str, const lCoord&& coord = { 0,0 });
+
+length_t printXYA(const char* str, const unsigned int nX = 0, const unsigned int nY = 0, const WORD wAttr = conAttrText);
+length_t printXYA(const char* str, const lCoord&& coord = { 0,0 }, const WORD wAttr = conAttrText);
+void drawRect(const lRect&& rect, const char&& ch = '+', const WORD wAttr = conAttrText);
 
 int main()
 {
 	initConsole();
 	std::string str;
-	while (std::cin >> str)
+	drawRect(lRect{ 5,5,10,10 });
+	while (std::getline(std::cin, str))
 	{
-		printXYA(str.c_str(), 3, 11,conAttrInfo);
+		printXYA(str.c_str(), 3, 11, conAttrInfo);
+		printXYA(str.c_str(), 3, 12, conAttrInfoH);
 	}
 	_getchar_nolock();
 }
@@ -44,63 +51,66 @@ bool initConsole()
 	return SetConsoleScreenBufferSize(hConsole, screen_buffer)
 		&& SetConsoleWindowInfo(hConsole, 1, &rect);
 }
-length_t printXY(const char* sStr, unsigned int nX, unsigned int nY)
+length_t printXY(const char* str, const unsigned int nX, const unsigned int nY)
 {
 	static COORD crood;
 	static DWORD len;
 	mtx_console.lock();
 	crood.X = nX;
 	crood.Y = nY;
-	WriteConsoleOutputCharacterA(hConsole, sStr, lstrlenA(sStr), crood, &len);
+	WriteConsoleOutputCharacterA(hConsole, str, lstrlenA(str), crood, &len);
 	mtx_console.unlock();
 	return len;
 }
-length_t printXYA(const char* sStr, unsigned int nX, unsigned int nY, WORD wAttr)
+length_t printXY(const char* str, const lCoord&& coord)
 {
-	static COORD crood;
 	static DWORD len;
 	mtx_console.lock();
-	crood.X = nX;
-	crood.Y = nY;
-	SetConsoleTextAttribute(hConsole, wAttr);
-	WriteConsoleOutputCharacterA(hConsole, sStr, lstrlenA(sStr), crood, &len);
-	SetConsoleTextAttribute(hConsole, conAttrText);
-	HRESULT a = GetLastError();
+	WriteConsoleOutputCharacterA(hConsole, str, lstrlenA(str), coord, &len);
 	mtx_console.unlock();
 	return len;
 }
-length_t printXY(std::string& sStr, unsigned int nX, unsigned int nY)
+length_t printXYA(const char* str, const unsigned int nX, const unsigned int nY, WORD wAttr)
 {
 	static COORD crood;
-	static DWORD len;
+	static DWORD len, len2;
 	mtx_console.lock();
 	crood.X = nX;
 	crood.Y = nY;
-	WriteConsoleOutputCharacterA(hConsole, sStr.c_str(), sStr.length(), crood, &len);
+	WriteConsoleOutputCharacterA(hConsole, str, lstrlenA(str), crood, &len);
+	FillConsoleOutputAttribute(hConsole, wAttr, len, crood, &len2);
 	mtx_console.unlock();
 	return len;
 }
-length_t printXY(std::wstring& wsStr, unsigned int nX, unsigned int nY)
+
+length_t printXYA(const char* str, const lCoord&& coord, WORD wAttr)
 {
-	static COORD crood;
-	static DWORD len;
+	static DWORD len, len2;
 	mtx_console.lock();
-	crood.X = nX;
-	crood.Y = nY;
-	WriteConsoleOutputCharacterW(hConsole, wsStr.c_str(), wsStr.length(), crood, &len);
+	WriteConsoleOutputCharacterA(hConsole, str, lstrlenA(str), coord, &len);
+	FillConsoleOutputAttribute(hConsole, wAttr, len, coord, &len2);
 	mtx_console.unlock();
 	return len;
 }
-length_t printXY(const wchar_t* wsStr, unsigned int nX, unsigned int nY)
+
+void drawRect(const lRect&& rect, const char&& ch, const WORD wAttr)
 {
-	static COORD crood;
-	static DWORD len;
-	mtx_console.lock();
-	crood.X = nX;
-	crood.Y = nY;
-	WriteConsoleOutputCharacterW(hConsole, wsStr, lstrlenW(wsStr), crood, &len);
-	mtx_console.unlock();
-	return len;
+	static DWORD len, len2;
+	static lCoord coord1;
+	coord1.X = rect.left, coord1.Y = rect.top;
+	len = rect.right - rect.left + 1;
+	FillConsoleOutputCharacterA(hConsole, ch, len, coord1, &len2);
+	FillConsoleOutputAttribute(hConsole, wAttr, len, coord1, &len2);
+	coord1.Y = rect.bottom;
+	FillConsoleOutputCharacterA(hConsole, ch, len, coord1, &len2);
+	FillConsoleOutputAttribute(hConsole, wAttr, len, coord1, &len2);
+	for (coord1.Y = rect.top + 1; coord1.Y < rect.bottom; ++coord1.Y)
+	{
+		coord1.X = rect.left;
+		WriteConsoleOutputCharacterA(hConsole, &ch, 1, coord1, &len2);
+		coord1.X = rect.right;
+		WriteConsoleOutputCharacterA(hConsole, &ch, 1, coord1, &len2);
+	}
 }
 
 // 运行程序: Ctrl + F5 或调试 >“开始执行(不调试)”菜单
