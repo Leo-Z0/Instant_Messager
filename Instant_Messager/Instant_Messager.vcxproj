@@ -141,6 +141,9 @@
   <ItemGroup>
     <ClCompile Include="Instant_Messager.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Tui.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
